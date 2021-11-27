@@ -1,7 +1,7 @@
 import { Middleware, MiddlewareAPI, Dispatch, AnyAction } from "redux";
-import io from "socket.io-client";
+import io, { Socket } from "socket.io-client";
 import { ActionTypes } from "../types/action";
-let websocket: SocketIOClient.Socket;
+let websocket: any;
 // 初期化済みフラグ
 let isInitialization = false;
 export const websocketMiddleware: Middleware = <S>({

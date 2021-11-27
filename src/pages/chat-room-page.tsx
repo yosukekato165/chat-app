@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { connect } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
 import UserList, { UserItem } from "../components/user-list";
 import Button from "../components/button";
@@ -43,41 +44,6 @@ interface ChatRoomPageProps {
   leaveRoom: typeof leaveRoom;
 }
 
-const users: UserItem[] = [
-  {
-    name: "ユーザー1",
-    socketId: "xxx1",
-  },
-  {
-    name: "ユーザー2",
-    socketId: "xxx2",
-  },
-  {
-    name: "ユーザー3",
-    socketId: "xxx3",
-  },
-];
-
-const messages: MessageItem[] = [
-  {
-    logId: 1,
-    userName: "ユーザー1",
-    time: "2020/01/00:01",
-    message: "テストメッセージ1",
-  },
-  {
-    logId: 2,
-    userName: "ユーザー2",
-    time: "2020/01/00:02",
-    message: "テストメッセージ2",
-  },
-  {
-    logId: 3,
-    userName: "ユーザー3",
-    time: "2020/01/00:03",
-    message: "テストメッセージ3",
-  },
-];
 interface ChatRoomPageProps {}
 
 const ChatRoomPage = (props: ChatRoomPageProps) => {
@@ -86,10 +52,12 @@ const ChatRoomPage = (props: ChatRoomPageProps) => {
   const [text, setText] = useState("");
   const [userName, setUsername] = useState("");
 
+  let navigate = useNavigate();
+
   useEffect(() => {
     if (!currentRoomId) {
       // 現在のチャットルームIDが未設定の場合はチャットルーム⼀覧に戻る
-      props.history.push("/");
+      navigate("/");
     } else {
       // 現在のチャットルームIDが存在する場合は保存
       props.setCurrentRoomId(currentRoomId);
@@ -98,42 +66,139 @@ const ChatRoomPage = (props: ChatRoomPageProps) => {
     props.connectWebSocket();
     setTimeout(() => {
       // 現在のチャットルームの情報取得
-      this.getCurrentRoomInfo();
+      getCurrentRoomInfo();
     }, 1000);
   });
+
+  /**
+   * 現在のチャットルーム情報取得処理
+   */
+  const getCurrentRoomInfo = (): void => {
+    props.getCurrentRoom({
+      roomId: currentRoomId,
+    });
+  };
+  /**
+   * 現在のチャットルームIDの取得
+   */
+  const getCurrentRoomId = (): string => {
+    const parameters: string = window.location.search;
+    // パラメーターの内、「roomId」を取得
+    const roomIdParam: string[] = parameters
+      .split("&")
+      .filter((p) => p.indexOf("roomId") > 0);
+    // パラメーターが存在する場合はその値を取得
+    if (roomIdParam.length === 1) {
+      const roomId = roomIdParam[0].split("=")[1];
+      return roomId;
+    }
+    return "";
+  };
+  /**
+   * ⼊室ボタンクリック時の処理
+   */
+  const onClickJoin = (): void => {
+    if (text) {
+      props.joinRoom({
+        roomId: currentRoomId,
+        userName: text,
+      });
+
+      setIsJoin(true);
+      setUsername(text);
+      setText("");
+    }
+  };
+  /**
+   * 投稿ボタンクリック時の処理
+   */
+  const onClickSending = (): void => {
+    if (text) {
+      props.sendMessage({
+        roomId: currentRoomId,
+        userName: userName,
+        message: text,
+      });
+      setText("");
+    }
+  };
+  /**
+   * ⼊⼒欄に⼊⼒時の処理
+   *
+   * @param e フォームイベント
+   */
+  const onInputText = (e: React.FormEvent<HTMLDivElement>): void => {
+    const text: string | null = e.currentTarget.textContent;
+    setText(text ? text : "");
+  };
+  /**
+   * ⼊⼒欄からフォーカスアウト時の処理
+   *
+   * @param e フォームイベント
+   */
+  const onBlurText = (e: React.FormEvent<HTMLDivElement>): void => {
+    e.currentTarget.textContent = "";
+  };
+  /**
+   * 戻るボタンクリック時の処理
+   */
+  const backToRoomList = (): void => {
+    // 現在のチャットルーム情報のクリア
+    props.clearCurrentRoom();
+    // チャットルーム退室
+    props.leaveRoom();
+    // チャットルーム⼀覧ページに遷移
+    navigate("/");
+  };
 
   return (
     <ChatRoomPageStyle isJoin={isJoin}>
       <div className="menu">
-        <div className="chatRoomName">チャットルーム名</div>
+        <div className="chatRoomName">{props.currentRoomName}</div>
         <div className="userList">
-          <UserList users={users} />
+          <UserList users={props.currentRoomUsers} />
         </div>
         <div className="button">
-          <Button name="戻る" onClick={() => {}} />
+          <Button name="戻る" onClick={() => backToRoomList()} />
         </div>
       </div>
       <div className="message">
-        <MessageList messages={messages} />
+        <MessageList messages={props.currentRoomLogs} />
       </div>
       <div className="createMessage">
         <div className="notJoin">
           <JoinChatRoom
-            onInputText={() => {}}
-            onBlurText={() => {}}
-            onClickButton={() => {}}
+            onInputText={(e) => onInputText(e)}
+            onBlurText={(e) => onBlurText(e)}
+            onClickButton={() => onClickJoin()}
           />
         </div>
         <div className="join">
           <CreateMessage
-            onInputText={() => {}}
-            onBlurText={() => {}}
-            onClickButton={() => {}}
+            onInputText={(e) => onInputText(e)}
+            onBlurText={(e) => onBlurText(e)}
+            onClickButton={() => onClickSending()}
           />
         </div>
       </div>
     </ChatRoomPageStyle>
   );
+};
+
+const mapStateToProps = ({ app }: ApplicationState) => ({
+  currentRoomId: app.currentRoom.id,
+  currentRoomName: app.currentRoom.name,
+  currentRoomUsers: app.currentRoom.users,
+  currentRoomLogs: app.currentRoom.logs,
+});
+const mapDispatchToProps = {
+  getCurrentRoom,
+  connectWebSocket,
+  joinRoom,
+  sendMessage,
+  clearCurrentRoom,
+  setCurrentRoomId,
+  leaveRoom,
 };
 
 const ChatRoomPageStyle = styled.div<{ isJoin: boolean }>`
@@ -186,4 +251,4 @@ const ChatRoomPageStyle = styled.div<{ isJoin: boolean }>`
     }
   }
 `;
-export default ChatRoomPage;
+export default connect(mapStateToProps, mapDispatchToProps)(ChatRoomPage);
